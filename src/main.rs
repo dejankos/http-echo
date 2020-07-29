@@ -1,16 +1,19 @@
+#[macro_use]
+extern crate log;
+
 use std::collections::HashMap;
-
-
-use std::sync::{Mutex};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use actix_web::{App, HttpMessage, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web::get;
-use actix_web::http::header::ToStrError;
 use actix_web::http::{HeaderMap, HeaderName, HeaderValue};
+use actix_web::http::header::ToStrError;
+use actix_web::middleware::Logger;
+use log::LevelFilter;
+use simplelog::{Config, TerminalMode, TermLogger};
 
-use actix_web::{web, App, HttpMessage, HttpRequest, HttpResponse, HttpServer};
-
-use crate::cache::CachedRequest;
+use crate::cache::{CachedRequest, to_cached_request, Cache};
 
 mod cache;
 
@@ -19,19 +22,17 @@ struct AppStateWithCounter {
 }
 
 #[get("/push/*")]
-async fn push_get(_data: web::Data<AppStateWithCounter>, req: HttpRequest) -> HttpResponse {
+async fn push_get(data: web::Data<Cache>, req: HttpRequest) -> HttpResponse {
     //store_data(data, req);
 
-    if let Ok(stored) = to_cached_request(req) {
-        HttpResponse::Ok().json(stored)
-    } else {
-        HttpResponse::InternalServerError().finish()
-    }
+    HttpResponse::Ok().json(to_cached_request(req))
 }
 
-fn store_data(data: web::Data<AppStateWithCounter>, _req: HttpRequest) {
-    let mut counter = data.counter.lock().unwrap(); // <- get counter's MutexGuard
-    *counter += 1; // <- access counter inside MutexGuard
+fn store_data(data: web::Data<Cache>, _req: HttpRequest) {
+    let c = data.cache.lock().unwrap();
+
+    // let mut counter = data.counter.lock().unwrap(); // <- get counter's MutexGuard
+    // *counter += 1; // <- access counter inside MutexGuard
 }
 
 // time = 1596040068821
@@ -43,77 +44,21 @@ fn store_data(data: web::Data<AppStateWithCounter>, _req: HttpRequest) {
 // scheme = http
 // path = /push/1/1
 
-fn to_cached_request(req: HttpRequest) -> Result<CachedRequest, ToStrError> {
-    let time = current_time_ms();
-    let header_map = req.headers(); // convert to h_map
-    let version = req.version(); // version to string
-    let method = req.method();
-    let query_string = String::from(req.query_string());
-
-    let conn_info = req.connection_info();
-
-    let ip = String::from(conn_info.remote().unwrap_or("localhost"));
-    let scheme = String::from(conn_info.scheme());
-    let path = String::from(req.path());
-    let body = String::from("");
-
-    println!("time = {}", time);
-    println!("header map = {:?}", header_map);
-    println!("version = {:?}", version);
-    println!("method = {:?}", method);
-    println!("query_string = {}", query_string);
-    println!("ip = {}", ip);
-    println!("scheme = {}", scheme);
-    println!("path = {}", path);
-    println!("header map new  = {:?}", to_hash_map(header_map).unwrap());
-
-    Ok(CachedRequest {
-        http_version: format!("{:?}", version),
-        method: format!("{:?}", method),
-        headers: to_hash_map(header_map)?,
-        query_string,
-        path,
-        body,
-        time,
-        ip,
-    })
-}
-
-fn current_time_ms() -> u128 {
-    if let Ok(dur) = SystemTime::now().duration_since(UNIX_EPOCH) {
-        dur.as_millis()
-    } else {
-        0
-    }
-}
-
-fn to_hash_map(headers: &HeaderMap) -> Result<HashMap<String, String>, ToStrError> {
-    headers
-        .iter()
-        .map(|(name, value)| header_as_str_tuple(name, value))
-        .collect()
-}
-
-fn header_as_str_tuple(
-    name: &HeaderName,
-    value: &HeaderValue,
-) -> Result<(String, String), ToStrError> {
-    Ok((name.to_string(), value.to_str()?.to_string()))
-}
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info");
-    env_logger::init();
+    TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed).unwrap();
 
     HttpServer::new(|| {
         App::new()
+            .wrap(Logger::default())
             .app_data(web::Data::new(AppStateWithCounter {
                 counter: Mutex::new(0),
             }))
             .service(push_get)
     })
-    .bind("127.0.0.1:8088")?
-    .run()
-    .await
+        .bind("127.0.0.1:8088")?
+        .run()
+        .await
 }
