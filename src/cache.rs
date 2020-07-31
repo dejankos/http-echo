@@ -1,13 +1,13 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use actix_web::http::{HeaderMap, HeaderName, HeaderValue};
-use actix_web::HttpRequest;
+use actix_web::{web, HttpRequest};
 use lru_time_cache::LruCache;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+use crate::util::{bytes_to_str, current_time_ms, headers_to_map, remove_base_path};
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CachedRequest {
     http_version: String,
     method: String,
@@ -32,8 +32,8 @@ impl CacheManager {
         }
     }
 
-    pub(crate) fn store(&mut self, req: HttpRequest) -> CachedRequest {
-        let cached_req = to_cached_request(req);
+    pub(crate) fn store(&mut self, req: HttpRequest, body: web::Bytes) -> CachedRequest {
+        let cached_req = to_cached_request(req, body);
         if let Some(r) = self.cache.get_mut(&cached_req.path) {
             r.push(cached_req.clone())
         } else {
@@ -50,54 +50,15 @@ impl CacheManager {
     }
 }
 
-fn to_cached_request(req: HttpRequest) -> CachedRequest {
-    let time = current_time_ms();
-    let headers = headers_to_map(req.headers());
-    let http_version = format!("{:?}", req.version());
-    let method = format!("{:?}", req.method());
-    let query_string = String::from(req.query_string());
-    let conn_info = req.connection_info();
-    let ip = String::from(conn_info.remote().unwrap_or("localhost"));
-    let path = remove_base_path(req.path());
-    let body = String::from("");
-
+fn to_cached_request(req: HttpRequest, body: web::Bytes) -> CachedRequest {
     CachedRequest {
-        http_version,
-        method,
-        headers,
-        query_string,
-        path,
-        body,
-        time,
-        ip,
-    }
-}
-
-fn remove_base_path(path: &str) -> String {
-    path[5..path.len()].to_string()
-}
-
-fn current_time_ms() -> u128 {
-    if let Ok(dur) = SystemTime::now().duration_since(UNIX_EPOCH) {
-        dur.as_millis()
-    } else {
-        0
-    }
-}
-
-fn headers_to_map(headers: &HeaderMap) -> HashMap<String, String> {
-    headers
-        .iter()
-        .filter_map(|(name, value)| header_as_str_tuple(name, value))
-        .collect()
-}
-
-fn header_as_str_tuple(name: &HeaderName, value: &HeaderValue) -> Option<(String, String)> {
-    match value.to_str() {
-        Ok(s) => Some((name.to_string(), s.to_string())),
-        Err(e) => {
-            error!("Error converting header = {} to string, e = {} ", name, e);
-            None
-        }
+        http_version: format!("{:?}", req.version()),
+        method: format!("{:?}", req.method()),
+        headers: headers_to_map(req.headers()),
+        query_string: req.query_string().to_string(),
+        path: remove_base_path(req.path()),
+        body: bytes_to_str(body),
+        time: current_time_ms(),
+        ip: String::from(req.connection_info().remote().unwrap_or("")),
     }
 }
