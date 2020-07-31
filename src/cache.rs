@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use actix_web::{web, HttpRequest};
+use actix_web::HttpRequest;
 use lru_time_cache::LruCache;
 use serde::{Deserialize, Serialize};
 
 use crate::util::{bytes_to_str, current_time_ms, headers_to_map, remove_base_path};
+use actix_web::web::Bytes;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CachedRequest {
@@ -32,7 +33,7 @@ impl CacheManager {
         }
     }
 
-    pub(crate) fn store(&mut self, req: HttpRequest, body: web::Bytes) -> CachedRequest {
+    pub(crate) fn store(&mut self, req: HttpRequest, body: Bytes) -> CachedRequest {
         let cached_req = to_cached_request(req, body);
         if let Some(r) = self.cache.get_mut(&cached_req.path) {
             r.push(cached_req.clone())
@@ -50,7 +51,7 @@ impl CacheManager {
     }
 }
 
-fn to_cached_request(req: HttpRequest, body: web::Bytes) -> CachedRequest {
+fn to_cached_request(req: HttpRequest, body: Bytes) -> CachedRequest {
     CachedRequest {
         http_version: format!("{:?}", req.version()),
         method: format!("{:?}", req.method()),
