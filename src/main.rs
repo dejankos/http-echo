@@ -38,6 +38,8 @@ pub struct ServerConfig {
         help = "Server workers - default value is number of logical CPUs"
     )]
     workers: Option<usize>,
+    #[structopt(short, long, help = "Cache TTL", default_value = "900000")]
+    ttl: u64,
 }
 
 #[get("/push/*")]
@@ -170,7 +172,7 @@ async fn main() -> std::io::Result<()> {
 
     let bind = format!("{}:{}", args.ip, args.port);
     let workers = args.workers.unwrap_or(num_cpus::get());
-    let global_state = web::Data::new(Mutex::new(CacheManager::new()));
+    let global_state = web::Data::new(Mutex::new(CacheManager::new(args.ttl)));
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())

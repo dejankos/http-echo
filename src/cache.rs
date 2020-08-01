@@ -25,10 +25,10 @@ pub struct CacheManager {
 }
 
 impl CacheManager {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(ttl: u64) -> Self {
         CacheManager {
             cache: LruCache::<String, Vec<CachedRequest>>::with_expiry_duration(
-                Duration::from_secs(15 * 60),
+                Duration::from_millis(ttl),
             ),
         }
     }
