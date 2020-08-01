@@ -3,10 +3,13 @@ name = "http-echo"
 version = "0.1.0"
 authors = ["dkos <kosdejan@yahoo.com>"]
 edition = "2018"
+categories = ["http"]
+description = "Simple http echo server"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+structopt = "0.3"
 actix-web = "2.0"
 actix-rt = "1.0"
 
@@ -17,3 +20,4 @@ simplelog = "0.7.6"
 log = "0.4.8"
 
 lru_time_cache = "0.10.0"
+num_cpus = "1.0"

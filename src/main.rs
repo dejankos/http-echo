@@ -13,6 +13,7 @@ use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use simplelog::{Config, TermLogger, TerminalMode};
+use structopt::StructOpt;
 
 use crate::cache::{CacheManager, CachedRequest};
 
@@ -23,6 +24,20 @@ mod cache;
 #[derive(Serialize, Deserialize)]
 struct NotFound {
     msg: String,
+}
+
+#[derive(StructOpt)]
+pub struct ServerConfig {
+    #[structopt(short, long, help = "Server ip", default_value = "127.0.0.1")]
+    ip: String,
+    #[structopt(short, long, help = "Server port", default_value = "8080")]
+    port: u16,
+    #[structopt(
+        short,
+        long,
+        help = "Server workers - default value is number of logical CPUs"
+    )]
+    workers: Option<usize>,
 }
 
 #[get("/push/*")]
@@ -123,8 +138,8 @@ fn store_data(
 
 fn not_found<B>(mut res: dev::ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>> {
     res.headers_mut().insert(
-    http::header::CONTENT_TYPE,
-    http::HeaderValue::from_static("application/json"),
+        http::header::CONTENT_TYPE,
+        http::HeaderValue::from_static("application/json"),
     );
 
     let path = res.request().path().to_string();
@@ -151,7 +166,10 @@ async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info");
     std::env::set_var("RUST_BACKTRACE", "1");
     TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed).unwrap();
+    let args: ServerConfig = ServerConfig::from_args();
 
+    let bind = format!("{}:{}", args.ip, args.port);
+    let workers = args.workers.unwrap_or(num_cpus::get());
     let global_state = web::Data::new(Mutex::new(CacheManager::new()));
     HttpServer::new(move || {
         App::new()
@@ -169,7 +187,8 @@ async fn main() -> std::io::Result<()> {
             .service(push_patch)
             .service(poll_get)
     })
-    .bind("127.0.0.1:8088")?
+    .bind(bind)?
+    .workers(workers)
     .shutdown_timeout(10)
     .run()
     .await
