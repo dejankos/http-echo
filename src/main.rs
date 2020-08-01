@@ -5,13 +5,13 @@ use std::borrow::BorrowMut;
 use std::sync::Mutex;
 
 use actix_web::body::{Body, ResponseBody};
-use actix_web::{connect, delete, dev, get, head, http, options, patch, post, put, trace};
-use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
-
 use actix_web::middleware::errhandlers::{ErrorHandlerResponse, ErrorHandlers};
 use actix_web::middleware::Logger;
 use actix_web::web::Bytes;
+use actix_web::{connect, delete, dev, get, head, http, options, patch, post, put, trace};
+use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use log::LevelFilter;
+use serde::{Deserialize, Serialize};
 use simplelog::{Config, TermLogger, TerminalMode};
 
 use crate::cache::{CacheManager, CachedRequest};
@@ -19,6 +19,11 @@ use crate::cache::{CacheManager, CachedRequest};
 mod util;
 
 mod cache;
+
+#[derive(Serialize, Deserialize)]
+struct NotFound {
+    msg: String,
+}
 
 #[get("/push/*")]
 async fn push_get(
@@ -110,14 +115,33 @@ async fn poll_get(mut manager: web::Data<Mutex<CacheManager>>, req: HttpRequest)
 fn store_data(
     mut manager: web::Data<Mutex<CacheManager>>,
     req: HttpRequest,
-    body: web::Bytes,
+    body: Bytes,
 ) -> CachedRequest {
     let mut man = manager.borrow_mut().lock().unwrap();
     man.store(req, body)
 }
 
-fn not_found<B>(res: dev::ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>> {
-    let r = res.map_body(|_h, _b| ResponseBody::Other(Body::from("lalal")));
+fn not_found<B>(mut res: dev::ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>> {
+    res.headers_mut().insert(
+    http::header::CONTENT_TYPE,
+    http::HeaderValue::from_static("application/json"),
+    );
+
+    let path = res.request().path().to_string();
+    let r = res.map_body(|_h, _b| {
+        ResponseBody::Other(Body::from(
+            if let Ok(json) = serde_json::to_string(&NotFound {
+                msg: format!(
+                    "This is not the path you're looking for, path = \"{}\".",
+                    path
+                ),
+            }) {
+                json
+            } else {
+                "Not Found".to_string()
+            },
+        ))
+    });
 
     Ok(ErrorHandlerResponse::Response(r))
 }
@@ -146,7 +170,7 @@ async fn main() -> std::io::Result<()> {
             .service(poll_get)
     })
     .bind("127.0.0.1:8088")?
-    .shutdown_timeout(5)
+    .shutdown_timeout(10)
     .run()
     .await
 }
