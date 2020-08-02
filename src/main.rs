@@ -195,3 +195,78 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use actix_web::dev::ServiceResponse;
+    use actix_web::http::StatusCode;
+    use actix_web::{test, web, App, Error};
+    use serde::de::DeserializeOwned;
+
+    use super::*;
+
+    #[actix_rt::test]
+    async fn should_cache_request_for_push_get() -> Result<(), Error> {
+        std::env::set_var("RUST_BACKTRACE", "full");
+        let mut app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(Mutex::new(CacheManager::new(1000 * 15))))
+                .service(push_get)
+                .service(poll_get),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/push/push_get?a=b&c=d")
+            .to_request();
+        let res = test::call_service(&mut app, req).await;
+        let status = &res.status();
+        let cr: CachedRequest = read_response_payload(res);
+
+        assert_response(&status, "GET", "/push_get", "a=b&c=d", &cr);
+
+        let req = test::TestRequest::get().uri("/poll/push_get").to_request();
+        let res = test::call_service(&mut app, req).await;
+        assert!(res.status().is_success());
+
+        let cr: Vec<CachedRequest> = read_response_payload(res);
+
+        assert_eq!(cr.len(), 1);
+        assert_response(&status, "GET", "/push_get", "a=b&c=d", &cr[0]);
+
+        Ok(())
+    }
+
+    fn assert_response(
+        status_code: &StatusCode,
+        method: &str,
+        path: &str,
+        query_string: &str,
+        cr: &CachedRequest,
+    ) {
+        assert!(status_code.is_success());
+        assert_eq!(method, cr.method);
+        assert_eq!(path, cr.path);
+        assert_eq!(query_string, cr.query_string);
+    }
+
+    fn read_response_payload<T>(res: ServiceResponse<Body>) -> T
+    where
+        T: DeserializeOwned,
+    {
+        match res.response().body().as_ref() {
+            Some(Body::Bytes(bytes)) => deserialize(bytes),
+            _ => panic!("Can't read response body"),
+        }
+    }
+
+    fn deserialize<T>(bytes: &Bytes) -> T
+    where
+        T: DeserializeOwned,
+    {
+        match serde_json::from_slice(bytes) {
+            Ok(r) => r,
+            _ => panic!("Can't deserialize response body"),
+        }
+    }
+}

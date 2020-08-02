@@ -11,11 +11,11 @@ use actix_web::web::Bytes;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CachedRequest {
     http_version: String,
-    method: String,
+    pub method: String,
     headers: HashMap<String, String>,
-    query_string: String,
-    path: String,
-    body: String,
+    pub query_string: String,
+    pub path: String,
+    pub body: String,
     time: u128,
     ip: String,
 }
