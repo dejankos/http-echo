@@ -1,7 +1,7 @@
 # Http Echo Server
 [![Build Status](https://travis-ci.com/dejankos/http-echo.svg?branch=master)](https://travis-ci.com/dejankos/http-echo)
 
-Simple http echo server for push/poll http requests on some path.
+Caching http echo server for push/poll requests on some path.
 
 ## Usage
 ```
