@@ -228,8 +228,6 @@ mod tests {
         let req = test::TestRequest::get().uri("/poll/push_get").to_request();
         let res = test::call_service(&mut app, req).await;
         let status = &res.status();
-        assert!(res.status().is_success());
-
         let cr: Vec<CachedRequest> = read_response_payload(res);
 
         assert_eq!(cr.len(), 1);
@@ -288,8 +286,6 @@ mod tests {
         let req = test::TestRequest::get().uri("/poll/push_post").to_request();
         let res = test::call_service(&mut app, req).await;
         let status = &res.status();
-        assert!(res.status().is_success());
-
         let cr: Vec<CachedRequest> = read_response_payload(res);
         assert_eq!(cr.len(), 2);
         assert_response(
