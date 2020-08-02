@@ -223,16 +223,91 @@ mod tests {
         let status = &res.status();
         let cr: CachedRequest = read_response_payload(res);
 
-        assert_response(&status, "GET", "/push_get", "a=b&c=d", &cr);
+        assert_response(&status, "GET", "/push_get", "a=b&c=d", None, &cr);
 
         let req = test::TestRequest::get().uri("/poll/push_get").to_request();
         let res = test::call_service(&mut app, req).await;
+        let status = &res.status();
         assert!(res.status().is_success());
 
         let cr: Vec<CachedRequest> = read_response_payload(res);
 
         assert_eq!(cr.len(), 1);
-        assert_response(&status, "GET", "/push_get", "a=b&c=d", &cr[0]);
+        assert_response(&status, "GET", "/push_get", "a=b&c=d", None, &cr[0]);
+
+        Ok(())
+    }
+
+    #[actix_rt::test]
+    async fn should_cache_multiple_request_for_push_post() -> Result<(), Error> {
+        std::env::set_var("RUST_BACKTRACE", "full");
+        let mut app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(Mutex::new(CacheManager::new(1000 * 15))))
+                .service(push_post)
+                .service(poll_get),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/push/push_post?a=b&c=d")
+            .set_payload("test payload")
+            .to_request();
+
+        let res = test::call_service(&mut app, req).await;
+        let status = &res.status();
+        let cr: CachedRequest = read_response_payload(res);
+
+        assert_response(
+            &status,
+            "POST",
+            "/push_post",
+            "a=b&c=d",
+            Some("test payload"),
+            &cr,
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/push/push_post?e=f&g=h")
+            .set_payload("test payload 1")
+            .to_request();
+
+        let res = test::call_service(&mut app, req).await;
+        let status = &res.status();
+        let cr: CachedRequest = read_response_payload(res);
+
+        assert_response(
+            &status,
+            "POST",
+            "/push_post",
+            "e=f&g=h",
+            Some("test payload 1"),
+            &cr,
+        );
+
+        let req = test::TestRequest::get().uri("/poll/push_post").to_request();
+        let res = test::call_service(&mut app, req).await;
+        let status = &res.status();
+        assert!(res.status().is_success());
+
+        let cr: Vec<CachedRequest> = read_response_payload(res);
+        assert_eq!(cr.len(), 2);
+        assert_response(
+            &status,
+            "POST",
+            "/push_post",
+            "a=b&c=d",
+            Some("test payload"),
+            &cr[0],
+        );
+        assert_response(
+            &status,
+            "POST",
+            "/push_post",
+            "e=f&g=h",
+            Some("test payload 1"),
+            &cr[1],
+        );
 
         Ok(())
     }
@@ -242,12 +317,16 @@ mod tests {
         method: &str,
         path: &str,
         query_string: &str,
+        body: Option<&str>,
         cr: &CachedRequest,
     ) {
         assert!(status_code.is_success());
         assert_eq!(method, cr.method);
         assert_eq!(path, cr.path);
         assert_eq!(query_string, cr.query_string);
+        if let Some(b) = body {
+            assert_eq!(b, cr.body);
+        }
     }
 
     fn read_response_payload<T>(res: ServiceResponse<Body>) -> T
