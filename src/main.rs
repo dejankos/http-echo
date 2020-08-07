@@ -126,7 +126,7 @@ async fn push_patch(
 #[get("/poll/*")]
 async fn poll_get(mut manager: web::Data<Mutex<CacheManager>>, req: HttpRequest) -> HttpResponse {
     let mut man = manager.borrow_mut().lock().unwrap();
-    HttpResponse::Ok().json(man.retrieve(&req.path().to_string()))
+    HttpResponse::Ok().json(man.retrieve(&req.path()))
 }
 
 fn store_data(
@@ -171,7 +171,7 @@ async fn main() -> std::io::Result<()> {
     let args: ServerConfig = ServerConfig::from_args();
 
     let bind = format!("{}:{}", args.ip, args.port);
-    let workers = args.workers.unwrap_or(num_cpus::get());
+    let workers = args.workers.unwrap_or_else(num_cpus::get);
     let global_state = web::Data::new(Mutex::new(CacheManager::new(args.ttl)));
     HttpServer::new(move || {
         App::new()

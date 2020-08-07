@@ -45,8 +45,8 @@ impl CacheManager {
         cached_req
     }
 
-    pub(crate) fn retrieve(&mut self, path: &String) -> Option<Vec<CachedRequest>> {
-        let key = &remove_base_path(path.as_str());
+    pub(crate) fn retrieve(&mut self, path: &str) -> Option<Vec<CachedRequest>> {
+        let key = &remove_base_path(path);
         self.cache.remove(key)
     }
 }

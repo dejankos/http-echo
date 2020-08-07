@@ -30,7 +30,7 @@ fn header_as_str_tuple(name: &HeaderName, value: &HeaderValue) -> Option<(String
 }
 
 pub fn bytes_to_str(body: Bytes) -> String {
-    if body.len() == 0 {
+    if body.is_empty() {
         String::new()
     } else {
         match String::from_utf8(body.to_vec()) {
