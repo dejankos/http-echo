@@ -163,7 +163,7 @@ fn not_found<B>(mut res: dev::ServiceResponse<B>) -> Result<ErrorHandlerResponse
     Ok(ErrorHandlerResponse::Response(r))
 }
 
-#[actix_rt::main]
+#[actix_web::main]
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info");
     std::env::set_var("RUST_BACKTRACE", "1");
@@ -202,6 +202,8 @@ mod tests {
     use actix_web::http::StatusCode;
     use actix_web::{test, web, App, Error};
     use serde::de::DeserializeOwned;
+    use actix_web::rt as actix_rt;
+
 
     use super::*;
 

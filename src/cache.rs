@@ -60,6 +60,6 @@ fn to_cached_request(req: HttpRequest, body: Bytes) -> CachedRequest {
         path: remove_base_path(req.path()),
         body: bytes_to_str(body),
         time: current_time_ms(),
-        ip: String::from(req.connection_info().remote().unwrap_or("")),
+        ip: String::from(req.connection_info().remote_addr().unwrap_or("")),
     }
 }
