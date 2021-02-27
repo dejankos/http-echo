@@ -2,13 +2,14 @@
 extern crate log;
 
 use std::borrow::BorrowMut;
+
 use std::sync::Mutex;
 
 use actix_web::body::{Body, ResponseBody};
 use actix_web::middleware::errhandlers::{ErrorHandlerResponse, ErrorHandlers};
 use actix_web::middleware::Logger;
 use actix_web::web::Bytes;
-use actix_web::{connect, delete, dev, get, head, http, options, patch, post, put, trace};
+use actix_web::{dev, get, http};
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
@@ -42,91 +43,18 @@ pub struct ServerConfig {
     ttl: u64,
 }
 
-#[get("/push/*")]
-async fn push_get(
-    manager: web::Data<Mutex<CacheManager>>,
-    req: HttpRequest,
-    body: Bytes,
-) -> HttpResponse {
-    HttpResponse::Ok().json(store_data(manager, req, body))
-}
-
-#[post("/push/*")]
-async fn push_post(
-    manager: web::Data<Mutex<CacheManager>>,
-    req: HttpRequest,
-    body: Bytes,
-) -> HttpResponse {
-    HttpResponse::Ok().json(store_data(manager, req, body))
-}
-
-#[put("/push/*")]
-async fn push_put(
-    manager: web::Data<Mutex<CacheManager>>,
-    req: HttpRequest,
-    body: Bytes,
-) -> HttpResponse {
-    HttpResponse::Ok().json(store_data(manager, req, body))
-}
-
-#[delete("/push/*")]
-async fn push_delete(
-    manager: web::Data<Mutex<CacheManager>>,
-    req: HttpRequest,
-    body: Bytes,
-) -> HttpResponse {
-    HttpResponse::Ok().json(store_data(manager, req, body))
-}
-
-#[head("/push/*")]
-async fn push_head(
-    manager: web::Data<Mutex<CacheManager>>,
-    req: HttpRequest,
-    body: Bytes,
-) -> HttpResponse {
-    HttpResponse::Ok().json(store_data(manager, req, body))
-}
-
-#[connect("/push/*")]
-async fn push_connect(
-    manager: web::Data<Mutex<CacheManager>>,
-    req: HttpRequest,
-    body: Bytes,
-) -> HttpResponse {
-    HttpResponse::Ok().json(store_data(manager, req, body))
-}
-
-#[options("/push/*")]
-async fn push_options(
-    manager: web::Data<Mutex<CacheManager>>,
-    req: HttpRequest,
-    body: Bytes,
-) -> HttpResponse {
-    HttpResponse::Ok().json(store_data(manager, req, body))
-}
-
-#[trace("/push/*")]
-async fn push_trace(
-    manager: web::Data<Mutex<CacheManager>>,
-    req: HttpRequest,
-    body: Bytes,
-) -> HttpResponse {
-    HttpResponse::Ok().json(store_data(manager, req, body))
-}
-
-#[patch("/push/*")]
-async fn push_patch(
-    manager: web::Data<Mutex<CacheManager>>,
-    req: HttpRequest,
-    body: Bytes,
-) -> HttpResponse {
-    HttpResponse::Ok().json(store_data(manager, req, body))
-}
-
 #[get("/poll/*")]
 async fn poll_get(mut manager: web::Data<Mutex<CacheManager>>, req: HttpRequest) -> HttpResponse {
     let mut man = manager.borrow_mut().lock().unwrap();
     HttpResponse::Ok().json(man.retrieve(&req.path()))
+}
+
+async fn push(
+    manager: web::Data<Mutex<CacheManager>>,
+    req: HttpRequest,
+    body: Bytes,
+) -> HttpResponse {
+    HttpResponse::Ok().json(store_data(manager, req, body))
 }
 
 fn store_data(
@@ -138,6 +66,7 @@ fn store_data(
     man.store(req, body)
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn not_found<B>(mut res: dev::ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>> {
     res.headers_mut().insert(
         http::header::CONTENT_TYPE,
@@ -178,15 +107,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .wrap(ErrorHandlers::new().handler(http::StatusCode::NOT_FOUND, not_found))
             .app_data(global_state.clone())
-            .service(push_get)
-            .service(push_post)
-            .service(push_put)
-            .service(push_delete)
-            .service(push_head)
-            .service(push_connect)
-            .service(push_options)
-            .service(push_trace)
-            .service(push_patch)
+            .service(web::resource("/push/*").to(push))
             .service(poll_get)
     })
     .bind(bind)?
@@ -200,10 +121,9 @@ async fn main() -> std::io::Result<()> {
 mod tests {
     use actix_web::dev::ServiceResponse;
     use actix_web::http::StatusCode;
+    use actix_web::rt as actix_rt;
     use actix_web::{test, web, App, Error};
     use serde::de::DeserializeOwned;
-    use actix_web::rt as actix_rt;
-
 
     use super::*;
 
@@ -213,7 +133,7 @@ mod tests {
         let mut app = test::init_service(
             App::new()
                 .app_data(web::Data::new(Mutex::new(CacheManager::new(1000 * 15))))
-                .service(push_get)
+                .service(web::resource("/push/*").to(push))
                 .service(poll_get),
         )
         .await;
@@ -244,7 +164,7 @@ mod tests {
         let mut app = test::init_service(
             App::new()
                 .app_data(web::Data::new(Mutex::new(CacheManager::new(1000 * 15))))
-                .service(push_post)
+                .service(web::resource("/push/*").to(push))
                 .service(poll_get),
         )
         .await;

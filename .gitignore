@@ -16,6 +16,7 @@ auto-import.
 .idea/*.iml
 .idea/*.xml
 .idea/modules
+.idea
 *.iml
 *.ipr
 
